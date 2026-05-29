@@ -1,0 +1,8 @@
+{
+  "name": "Remix: SMREP",
+  "description": "Secure Mobile Recovery \u0026 Evidence Platform (Mobile Tracker) - lawful mobile recovery system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMREP Command Control & Audit Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- React and Babel via CDN for immediate visual container -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [devices, setDevices] = useState([]);
+            const [events, setEvents] = useState([]);
+            const [auditLogs, setAuditLogs] = useState([]);
+            const [selectedDevice, setSelectedDevice] = useState(null);
+            const [refreshInterval, setRefreshInterval] = useState(5000);
+            const [activeTab, setActiveTab] = useState('devices');
+
+            useEffect(() => {
+                fetchDashboardData();
+                const interval = setInterval(fetchDashboardData, refreshInterval);
+                return () => clearInterval(interval);
+            }, [refreshInterval]);
+
+            const fetchDashboardData = async () => {
+                try {
+                    // Pulling from same port FastAPI server host
+                    const devRes = await fetch('/api/admin/devices');
+                    if (devRes.ok) {
+                        const devData = await devRes.json();
+                        setDevices(devData);
+                    }
+
+                    const evRes = await fetch('/api/recovery/events');
+                    if (evRes.ok) {
+                        const evData = await evRes.json();
+                        setEvents(evData);
+                    }
+
+                    const auditRes = await fetch('/api/audit');
+                    if (auditRes.ok) {
+                        const auditData = await auditRes.json();
+                        setAuditLogs(auditData.reverse());
+                    }
+                } catch (e) {
+                    console.error("Connection offline to FastAPI.", e);
+                }
+            };
+
+            const toggleLostMode = async (deviceHash, currentStatus) => {
+                const endpoint = currentStatus ? '/api/lostmode/disable' : '/api/lostmode/enable';
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_hash: deviceHash, reason: "Forced from Admin Portal Console" })
+                    });
+                    if (response.ok) {
+                        fetchDashboardData();
+                    }
+                } catch (e) {
+                    alert("FastAPI connection offline.");
+                }
+            };
+
+            return (
+                <div class="flex flex-col min-h-screen">
+                    {/* Header */}
+                    <header class="bg-slate-950 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <i class="fa-solid fa-shield-halved text-emerald-400 text-2xl"></i>
+                            <div>
+                                <h1 class="text-xl font-black tracking-wider leading-none text-emerald-400">SMREP</h1>
+                                <span class="text-xs text-slate-400">Secure Mobile Recovery & Evidence Platform</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4 text-sm">
+                            <span class="flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded text-xs">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-slate-300">FastAPI Host Online</span>
+                            </span>
+                            <button onClick={fetchDashboardData} class="p-2 bg-slate-800 hover:bg-slate-700 rounded transition duration-150">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Main Workspace Grid */}
+                    <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+
+                        {/* Sidebar tabs */}
+                        <div class="md:col-span-1 space-y-2">
+                            <nav class="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-1.5">
+                                <h2 class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3 px-2">Navigation</h2>
+                                
+                                <button 
+                                    onClick={() => setActiveTab('devices')}
+                                    class={`w-full text-left px-3 py-2 rounded flex items-center space-x-3 transition duration-150 text-sm ${activeTab === 'devices' ? 'bg-emerald-500/20 text-emerald-400 font-bold border-l-2 border-emerald-400' : 'hover:bg-slate-850 text-slate-300'}`}
+                                >
+                                    <i class="fa-solid fa-mobile-screen"></i>
+                                    <span>Binding Devices ({devices.length})</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setActiveTab('events')}
+                                    class={`w-full text-left px-3 py-2 rounded flex items-center space-x-3 transition duration-150 text-sm ${activeTab === 'events' ? 'bg-emerald-500/20 text-emerald-400 font-bold border-l-2 border-emerald-400' : 'hover:bg-slate-850 text-slate-300'}`}
+                                >
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <span>Recovery Actions ({events.length})</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setActiveTab('audit')}
+                                    class={`w-full text-left px-3 py-2 rounded flex items-center space-x-3 transition duration-150 text-sm ${activeTab === 'audit' ? 'bg-emerald-500/20 text-emerald-400 font-bold border-l-2 border-emerald-400' : 'hover:bg-slate-850 text-slate-300'}`}
+                                >
+                                    <i class="fa-solid fa-receipt"></i>
+                                    <span>Audit Trail Ledger</span>
+                                </button>
+                            </nav>
+
+                            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 text-xs text-slate-400">
+                                <h3 class="font-bold text-slate-300 mb-1">SMREP Compliance Mode</h3>
+                                <p class="leading-relaxed">All coordinates are protected using local SHA-256 bound hashing identifiers prior to submission.</p>
+                            </div>
+                        </div>
+
+                        {/* Content display area */}
+                        <div class="md:col-span-3">
+                            {activeTab === 'devices' && (
+                                <div class="space-y-6">
+                                    <div class="bg-slate-950 p-6 rounded-lg border border-slate-800">
+                                        <h2 class="text-lg font-bold mb-4 flex items-center space-x-2 text-slate-100">
+                                            <i class="fa-solid fa-mobile-screen text-slate-500"></i>
+                                            <span>Enrolled System Devices</span>
+                                        </h2>
+
+                                        {devices.length === 0 ? (
+                                            <div class="text-center py-12 border-2 border-dashed border-slate-800 rounded-lg">
+                                                <i class="fa-solid fa-circle-exclamation text-slate-600 text-4xl mb-3"></i>
+                                                <p class="text-slate-500">No active device bindings reported from SMREP Android client.</p>
+                                            </div>
+                                        ) : (
+                                            <div class="overflow-x-auto">
+                                                <table class="w-full text-left text-sm whitespace-nowrap">
+                                                    <thead>
+                                                        <tr class="border-b border-slate-800 text-slate-400 text-xs">
+                                                            <th class="pb-3">Device Identity (Hashed)</th>
+                                                            <th class="pb-3">Owner Token</th>
+                                                            <th class="pb-3">Registered At</th>
+                                                            <th class="pb-3">Lawful Recovery State</th>
+                                                            <th class="pb-3 text-right">Intervention</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-slate-800/50">
+                                                        {devices.map(dev => (
+                                                            <tr key={dev.device_hash} class="hover:bg-slate-900/50">
+                                                                <td class="py-4 font-mono text-xs text-slate-300 max-w-xs overflow-hidden truncate">
+                                                                    {dev.device_hash}
+                                                                </td>
+                                                                <td class="py-4 text-xs font-semibold text-slate-400">
+                                                                    {dev.owner_id}
+                                                                </td>
+                                                                <td class="py-4 text-xs text-slate-500">
+                                                                    {new Date(dev.registered_at).toLocaleString()}
+                                                                </td>
+                                                                <td class="py-4">
+                                                                    <span class={`px-2 py-0.5 rounded text-xs font-bold ${dev.is_lost_mode ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-400'}`}>
+                                                                        {dev.is_lost_mode ? 'LOST MODE' : 'STANDBY'}
+                                                                    </span>
+                                                                </td>
+                                                                <td class="py-4 text-right">
+                                                                    <button 
+                                                                        onClick={() => toggleLostMode(dev.device_hash, dev.is_lost_mode)}
+                                                                        class={`px-3 py-1 rounded text-xs font-bold transition duration-150 ${dev.is_lost_mode ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600 hover:bg-rose-500 text-white'}`}
+                                                                    >
+                                                                        {dev.is_lost_mode ? 'Revoke Lost State' : 'Declare Lost Mode'}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'events' && (
+                                <div class="bg-slate-950 p-6 rounded-lg border border-slate-800">
+                                    <h2 class="text-lg font-bold mb-4 flex items-center space-x-2 text-slate-100">
+                                        <i class="fa-solid fa-clock-rotate-left text-slate-500"></i>
+                                        <span>Automated Recovery Snapshots & Trigger Logs</span>
+                                    </h2>
+
+                                    {events.length === 0 ? (
+                                        <div class="text-center py-12 border-2 border-dashed border-slate-800 rounded-lg text-slate-500">
+                                            <i class="fa-solid fa-video-slash text-slate-600 text-4xl mb-3"></i>
+                                            <p>No critical system triggers (SIM Swaps/Offline alerts) flagged yet.</p>
+                                        </div>
+                                    ) : (
+                                        <div class="space-y-4">
+                                            {events.map((ev, index) => (
+                                                <div key={index} class="bg-slate-900 p-4 rounded border border-slate-800 flex justify-between items-start">
+                                                    <div>
+                                                        <div class="flex items-center space-x-2">
+                                                            <span class="bg-rose-500/10 text-rose-400 text-xs font-black uppercase px-2 py-0.5 rounded">
+                                                                {ev.event_type}
+                                                            </span>
+                                                            <span class="text-xs text-slate-400 font-mono">{ev.device_hash.slice(0, 16)}...</span>
+                                                        </div>
+                                                        <p class="text-slate-200 mt-2 text-sm">{ev.description}</p>
+                                                    </div>
+                                                    <span class="text-xs text-slate-500">
+                                                        {new Date(ev.timestamp).toLocaleTimeString()}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {activeTab === 'audit' && (
+                                <div class="bg-slate-950 p-6 rounded-lg border border-slate-800">
+                                    <h2 class="text-lg font-bold mb-4 flex items-center space-x-2 text-slate-100">
+                                        <i class="fa-solid fa-receipt text-slate-500"></i>
+                                        <span>Cryptographic Ledger Action Logs</span>
+                                    </h2>
+
+                                    <div class="bg-slate-900 rounded p-4 border border-slate-800 h-96 overflow-y-auto font-mono text-xs text-emerald-400 space-y-1.5">
+                                        {auditLogs.map((log, idx) => (
+                                            <div key={idx} class="hover:bg-slate-850 p-1 flex justify-between items-center">
+                                                <span>
+                                                    <span class="text-slate-500">[{new Date(log.timestamp * 1000).toLocaleTimeString()}]</span>{" "}
+                                                    <span class="font-bold text-slate-300">{log.user}:</span>{" "}
+                                                    {log.action}
+                                                </span>
+                                                <span class="text-slate-600">SECURE_CHAIN</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* Footer bar */}
+                    <footer class="bg-slate-950 border-t border-slate-800 py-4 text-center text-slate-500 text-xs">
+                        SMREP Admin Console. Lawful Play Store Compliant and Encrypted Chain-of-Custody Enabled.
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
